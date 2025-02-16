@@ -35,18 +35,38 @@ int main(int argc, char *argv[]) {
     SDL_FreeSurface(imageSurface);
 
     int running = 1;
-    SDL_Event e;
+    SDL_Event event; 
+    int colorToggle = 0; // Toggle variable for background color
+
     while (running) {
-        while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) {
-                running = 0;
+        while (SDL_PollEvent(&event)) {
+            // Closing the window manually
+            if (event.type == SDL_QUIT ) { 
+                running = 0; 
+            } 
+            // Key pressed is ESCAPE key
+            if (event.type == SDL_KEYDOWN) { 
+                if (event.key.keysym.sym == SDLK_ESCAPE) { 
+                    running = 0;
+                } 
+            }
+            // Key pressed is SPACE key
+            if (event.type == SDL_KEYDOWN) { 
+                if (event.key.keysym.sym == SDLK_SPACE) {
+                    colorToggle = !colorToggle ; // Toggle color
+                }
+            }
+            // Change background color
+            if (colorToggle) {
+                SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255); // Green
+            } else {
+                SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255); // Blue
             }
         }
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, NULL, NULL);
         SDL_RenderPresent(renderer);
     }
-
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
