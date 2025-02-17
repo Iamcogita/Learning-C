@@ -51,17 +51,15 @@ Piece *getNextTurn() {
     return nextPiece;
 }
 
-bool isPathClear(Piece *piece, int newX, int newY) {
+bool isPathClear(Piece *piece, int newX, int newY, int board[BOARD_SIZE][BOARD_SIZE]) {
     int xDir = (newX - piece->pos.x) > 0 ? 1 : ((newX - piece->pos.x) < 0 ? -1 : 0);
     int yDir = (newY - piece->pos.y) > 0 ? 1 : ((newY - piece->pos.y) < 0 ? -1 : 0);
     int x = piece->pos.x + xDir;
     int y = piece->pos.y + yDir;
 
     while (x != newX || y != newY) {
-        for (int i = 0; i < NUM_PIECES; i++) {
-            if (turnOrder[i]->pos.x == x && turnOrder[i]->pos.y == y) {
-                return false;
-            }
+        if (board[x][y] != 0) {
+            return false;
         }
         x += xDir;
         y += yDir;
@@ -69,16 +67,16 @@ bool isPathClear(Piece *piece, int newX, int newY) {
     return true;
 }
 
-bool isValidMove(Piece *piece, int newX, int newY) {
+bool isValidMove(Piece *piece, int newX, int newY, int board[BOARD_SIZE][BOARD_SIZE]) {
     switch (piece->type) {
         case 1: // King: One tile in any direction
             return abs(newX - piece->pos.x) <= 1 && abs(newY - piece->pos.y) <= 1;
         case 2: // Queen: Any straight line
-            return (newX == piece->pos.x || newY == piece->pos.y || abs(newX - piece->pos.x) == abs(newY - piece->pos.y)) && isPathClear(piece, newX, newY);
+            return abs(newX - piece->pos.x) <= 1 && abs(newY - piece->pos.y) <= 1 && isPathClear(piece, newX, newY, board);
         case 3: // Bishop: Diagonal movement
-            return abs(newX - piece->pos.x) == abs(newY - piece->pos.y) && isPathClear(piece, newX, newY);
+            return abs(newX - piece->pos.x) == abs(newY - piece->pos.y) && isPathClear(piece, newX, newY, board);
         case 4: // Rook: Vertical or horizontal movement
-            return (newX == piece->pos.x || newY == piece->pos.y) && isPathClear(piece, newX, newY);
+            return (newX == piece->pos.x || newY == piece->pos.y) && isPathClear(piece, newX, newY, board);
         case 5: // Knight: L-shaped movement
             return (abs(newX - piece->pos.x) == 2 && abs(newY - piece->pos.y) == 1) || (abs(newX - piece->pos.x) == 1 && abs(newY - piece->pos.y) == 2);
         default:
@@ -86,10 +84,14 @@ bool isValidMove(Piece *piece, int newX, int newY) {
     }
 }
 
-void movePiece(Piece *piece, int newX, int newY) {
-    if (isValidMove(piece, newX, newY)) {
+void movePiece(Piece *piece, int newX, int newY, int board[BOARD_SIZE][BOARD_SIZE]) {
+    if (isValidMove(piece, newX, newY, board)) {
         piece->pos.x = newX;
         piece->pos.y = newY;
+        board[piece->pos.x][piece->pos.y] = 0;
+        piece->pos.x = newX;
+        piece->pos.y = newY;
+        board[newX][newY] = 1;
         printf("Piece moved to (%d, %d)\n", newX, newY);
     } else {
         printf("Invalid move!\n");
@@ -140,12 +142,18 @@ void drawBoard() {
         for (int col = 0; col < BOARD_SIZE; col++) {
             SDL_Rect tile = {col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE};
             if ((row + col) % 2 == 0) {
-                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
             } else {
                 SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
             }
             SDL_RenderFillRect(renderer, &tile);
         }
+    }
+
+    if (selectedPiece) {
+        SDL_Rect highlightTile = {selectedPiece->pos.x * TILE_SIZE, selectedPiece->pos.y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 100); // Highlight
+        SDL_RenderFillRect(renderer, &highlightTile);
     }
 }
 
@@ -156,19 +164,24 @@ void renderPieces(Piece *pieces, int num_pieces) {
     }
 }
 
-void handleMouseClick(int x, int y, Piece *pieces) {
+void handleMouseClick(int x, int y, Piece *pieces, int board[BOARD_SIZE][BOARD_SIZE]) {
     int boardX = x / TILE_SIZE;
     int boardY = y / TILE_SIZE;
+
+    if (boardX < 0 || boardX >= BOARD_SIZE || boardY < 0 || boardY >= BOARD_SIZE) {
+        printf("Click out of bounds!\n");
+        return;
+    }
     
     for (int i = 0; i < NUM_PIECES; i++) {
-        if (pieces[i].pos.x == boardX && pieces[i].pos.y == boardY) {
+        if (board[boardX][boardY] != 0) {
             selectedPiece = &pieces[i];
             printf("Piece selected at (%d, %d)\n", boardX, boardY);
             return;
         }
     }
     if (selectedPiece) {
-        movePiece(selectedPiece, boardX, boardY);
+        movePiece(selectedPiece, boardX, boardY, board);
         selectedPiece = NULL;
     }
 }
@@ -180,14 +193,22 @@ void gameLoop(Piece *pieces) {
     int frameTime;
     const int frameDelay = 1000 / FPS;
     
+    int board[BOARD_SIZE][BOARD_SIZE] = {0};
+    for (int i = 0; i < NUM_PIECES; i++) {
+        board[pieces[i].pos.x][pieces[i].pos.y] = 1;
+    }
     sortTurnOrder(pieces, NUM_PIECES);
 
+        frameStart = SDL_GetTicks();
+        sortTurnOrder(pieces, NUM_PIECES);
+        Piece *currentPiece = NULL;
     while (running) {
+        currentPiece = getNextTurn();
         frameStart = SDL_GetTicks();
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) running = false;
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) running = false;
-            if (e.type == SDL_MOUSEBUTTONDOWN) handleMouseClick(e.button.x, e.button.y, pieces);
+            if (e.type == SDL_MOUSEBUTTONDOWN) handleMouseClick(e.button.x, e.button.y, pieces, board);
         }
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
@@ -207,15 +228,21 @@ void closeSDL() {
             textures[i] = NULL;
         }
     }
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    if (renderer != NULL) {
+        SDL_DestroyRenderer(renderer);
+        renderer = NULL;
+    }
+    if (window != NULL) {
+        SDL_DestroyWindow(window);
+        window = NULL;
+    }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* args[]) {
+    // Initialize SDL and create window and renderer
     if (!initSDL()) return 1;
     
-    // Load textures
+    // Load textures for all pieces
     textures[0] = loadTexture("black-king.png");
     textures[1] = loadTexture("black-queen.png");
     textures[2] = loadTexture("black-bishop.png");
@@ -227,20 +254,24 @@ int main(int argc, char *argv[]) {
     textures[8] = loadTexture("white-rook.png");
     textures[9] = loadTexture("white-knight.png");
 
+    // Initialize pieces with their positions, stats, types, players, and textures
     Piece pieces[NUM_PIECES] = {
-        {{0, 0}, {5, 10, 5}, 1, 1, textures[0]},
-        {{1, 0}, {3, 8, 6}, 2, 1, textures[1]},
-        {{2, 0}, {4, 7, 7}, 3, 1, textures[2]},
-        {{3, 0}, {6, 9, 4}, 4, 1, textures[3]},
-        {{4, 0}, {3, 8, 6}, 5, 1, textures[4]},
-        {{0, 7}, {4, 7, 7}, 1, 2, textures[5]},
-        {{1, 7}, {5, 10, 5}, 2, 2, textures[6]},
-        {{2, 7}, {3, 8, 6}, 3, 2, textures[7]},
-        {{3, 7}, {4, 7, 7}, 4, 2, textures[8]},
-        {{4, 7}, {6, 9, 4}, 5, 2, textures[9]}
+        {{0, 0}, {5, 8, 8}, 1, 1, textures[0]},
+        {{1, 0}, {4, 4, 6}, 2, 1, textures[1]},
+        {{2, 0}, {5, 6, 7}, 3, 1, textures[2]},
+        {{3, 0}, {3, 8, 12}, 4, 1, textures[3]},
+        {{4, 0}, {6, 8, 8}, 5, 1, textures[4]},
+        {{7, 7}, {5, 8, 8}, 1, 2, textures[5]},
+        {{6, 7}, {4, 4, 6}, 2, 2, textures[6]},
+        {{5, 7}, {5, 6, 7}, 3, 2, textures[7]},
+        {{4, 7}, {3, 8, 12}, 4, 2, textures[8]},
+        {{3, 7}, {6, 8, 8}, 5, 2, textures[9]}
     };
 
+    // Start the game loop
     gameLoop(pieces);
+    
+    // Clean up and close SDL
     closeSDL();
     return 0;
 }
