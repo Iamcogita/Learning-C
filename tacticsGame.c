@@ -21,8 +21,8 @@ typedef struct {
 typedef struct {
     Position pos;
     Stats stats; 
-    int type; // 0: None, 1: King, 2: Queen, etc.
-    int player; // 1 or 2
+    int type; // 0: None, 1: King, 2: Queen, 3: Bishop, 4: Rook, 5: Knight
+    int player; // 0: None, 1: Black , 2: White
     SDL_Texture* texture;
 } Piece;
 
@@ -51,16 +51,34 @@ Piece *getNextTurn() {
     return nextPiece;
 }
 
+bool isPathClear(Piece *piece, int newX, int newY) {
+    int xDir = (newX - piece->pos.x) > 0 ? 1 : ((newX - piece->pos.x) < 0 ? -1 : 0);
+    int yDir = (newY - piece->pos.y) > 0 ? 1 : ((newY - piece->pos.y) < 0 ? -1 : 0);
+    int x = piece->pos.x + xDir;
+    int y = piece->pos.y + yDir;
+
+    while (x != newX || y != newY) {
+        for (int i = 0; i < NUM_PIECES; i++) {
+            if (turnOrder[i]->pos.x == x && turnOrder[i]->pos.y == y) {
+                return false;
+            }
+        }
+        x += xDir;
+        y += yDir;
+    }
+    return true;
+}
+
 bool isValidMove(Piece *piece, int newX, int newY) {
     switch (piece->type) {
         case 1: // King: One tile in any direction
             return abs(newX - piece->pos.x) <= 1 && abs(newY - piece->pos.y) <= 1;
         case 2: // Queen: Any straight line
-            return (newX == piece->pos.x || newY == piece->pos.y || abs(newX - piece->pos.x) == abs(newY - piece->pos.y));
+            return (newX == piece->pos.x || newY == piece->pos.y || abs(newX - piece->pos.x) == abs(newY - piece->pos.y)) && isPathClear(piece, newX, newY);
         case 3: // Bishop: Diagonal movement
-            return abs(newX - piece->pos.x) == abs(newY - piece->pos.y);
+            return abs(newX - piece->pos.x) == abs(newY - piece->pos.y) && isPathClear(piece, newX, newY);
         case 4: // Rook: Vertical or horizontal movement
-            return (newX == piece->pos.x || newY == piece->pos.y);
+            return (newX == piece->pos.x || newY == piece->pos.y) && isPathClear(piece, newX, newY);
         case 5: // Knight: L-shaped movement
             return (abs(newX - piece->pos.x) == 2 && abs(newY - piece->pos.y) == 1) || (abs(newX - piece->pos.x) == 1 && abs(newY - piece->pos.y) == 2);
         default:
